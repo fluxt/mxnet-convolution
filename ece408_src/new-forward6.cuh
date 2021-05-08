@@ -1,0 +1,198 @@
+#ifndef MXNET_OPERATOR_NEW_FORWARD_CUH
+#define MXNET_OPERATOR_NEW_FORWARD_CUH_
+
+#include <mxnet/base.h>
+#include <fstream>
+#include <iostream>
+#include <iomanip>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdio.h>
+#define BLOCK_SIZE 1024
+
+using namespace std;
+namespace mxnet
+{
+namespace op
+{
+
+__constant__ float mask[2400];
+
+    __global__ void forward_kernel(float *y, const float *x, float *x_unroll,const int M, const int B,  const int C, const int H, const int W, const int K)
+{
+    int H_out = H-K+1;
+    int W_out = W-K+1;
+    int W_unroll = H_out * W_out;
+    int t = blockIdx.x * BLOCK_SIZE+threadIdx.x;
+    int b = blockIdx.y;
+    int c, s, h_out, w_out, h_base, h_unroll;
+    int size_for_each_input_section = H_out * W_out * K * K;
+    int size_for_each_batch = C * size_for_each_input_section;
+
+#define x4d(i3, i2, i1, i0) x[(i3) * (C * H * W) + (i2) * (H * W) + (i1) * (W) + i0]
+#define x_unroll3d(b, h, w) x_unroll[b * size_for_each_batch + h * (W_unroll) + w]
+#define y3d(i3, i2,     i0) y[(i3) * (M * H_out * W_out) + (i2) * (H_out * W_out) +                  i0]
+#define k2d(i3,         i0) mask[(i3) * (C * K * K) +                               i0]
+
+    if(t < C*W_unroll){
+        c = t/W_unroll; //which section
+        s = t%W_unroll; //which col
+        h_out = s/W_out; //corresponding to which output height
+        w_out = s%W_out; //corresponding to which output width
+        h_base = c*K*K; 
+        for(int p =0; p < K; p++){
+            for(int q=0; q < K; q ++){
+                h_unroll = h_base+p*K+q;
+                x_unroll3d(b, h_unroll, s)= x4d(b, c, h_out+p, w_out+q);
+            }
+        }
+    }
+    __syncthreads();
+
+    if(t < W_unroll){
+        float acc_s [16];
+        memset(acc_s, 0, M*sizeof(float));
+        for (int i=0; i<C*K*K; i++) {
+            float temp = x_unroll3d(b, i, t);
+            for(int j = 0; j < M; j++){
+                acc_s[j] += k2d(j, i)*temp;
+            }
+        }
+        __syncthreads();
+        for(int j = 0; j < M; j++){
+            y3d(b, j, t) = acc_s[j];
+        }
+    }
+
+#undef x4d
+#undef x_unroll3d
+#undef y3d
+#undef k2d
+
+}
+
+    __global__ void unroll_kernel(const float *x, float *x_unroll,const int B,  const int C, const int H, const int W, const int K)
+{
+    int H_out = H-K+1;
+    int W_out = W-K+1;
+    int W_unroll = H_out * W_out;
+    int t = blockIdx.x * BLOCK_SIZE+threadIdx.x;
+    int b = blockIdx.y;
+    int c, s, h_out, w_out, h_base, h_unroll;
+    int size_for_each_input_section = H_out * W_out * K * K;
+    int size_for_each_batch = C * size_for_each_input_section;
+
+#define x4d(i3, i2, i1, i0) x[(i3) * (C * H * W) + (i2) * (H * W) + (i1) * (W) + i0]
+#define x_unroll3d(b, h, w) x_unroll[b * size_for_each_batch + h * (W_unroll) + w]
+
+    if(t < C*W_unroll){
+        c = t/W_unroll; //which section
+        s = t%W_unroll; //which col
+        h_out = s/W_out; //corresponding to which output height
+        w_out = s%W_out; //corresponding to which output width
+        h_base = c*K*K; 
+        for(int p =0; p < K; p++){
+            for(int q=0; q < K; q ++){
+                h_unroll = h_base+p*K+q;
+                x_unroll3d(b, h_unroll, s)= x4d(b, c, h_out+p, w_out+q);
+            }
+        }
+    }
+    __syncthreads();
+
+#undef x4d
+#undef x_unroll3d
+
+}
+
+__global__ void matrixMultiply(float *y, float *x_unroll, const int B, const int M, const int C, const int H, const int W, const int K) {
+#define y4d(i3, i2, i1, i0) y[(i3) * (M * H_out * W_out) + (i2) * (H_out * W_out) + (i1) * (W_out) + i0]
+#define y3d(i3, i2,     i0) y[(i3) * (M * H_out * W_out) + (i2) * (H_out * W_out) +                  i0]
+#define x4d(i3, i2, i1, i0) x[(i3) * (C * H * W) + (i2) * (H * W) + (i1) * (W) + i0]
+#define x_unroll3d(b, h, w) x_unroll[b * H_out * W_out * C * K * K + h * (H_out * W_out) + w]
+#define k4d(i3, i2, i1, i0) mask[(i3) * (C * K * K) + (i2) * (K * K) + (i1) * (K) + i0]
+#define k2d(i3,         i0) mask[(i3) * (C * K * K) +                               i0]
+
+  const int H_out = H-K+1;
+  const int W_out = W-K+1;
+
+  int b = blockIdx.y;
+  //int m = blockIdx.y;
+  int col = blockIdx.x*blockDim.x+threadIdx.x; //output pixel sequence idx
+  if (col < H_out * W_out) {
+      float acc_s [16];
+      memset(acc_s, 0, M*sizeof(float));
+      //float sum = 0.0;
+      for (int i=0; i<C*K*K; i++) {
+          float temp = x_unroll3d(b, i, col);
+          for(int j = 0; j < M; j++){
+              //sum += k2d(m, i) * x_unroll3d(b, i, col);
+              acc_s[j] += k2d(j, i)*temp;
+          }
+      }
+      __syncthreads();
+      for(int j = 0; j < M; j++){
+          y3d(b, j, col) = acc_s[j];
+      }
+  }
+
+#undef y4d
+#undef y3d
+#undef x4d
+#undef k4d
+#undef k2d
+#undef x_unroll3d
+}
+
+/* 
+   This function is called by new-inl.h
+   Any code you write should be executed by this function.
+   For ECE408, we only expect the float version of the operator to be called, so here we specialize with only floats.
+*/
+template <>
+void forward<gpu, float>(mshadow::Tensor<gpu, 4, float> &y, const mshadow::Tensor<gpu, 4, float> &x, const mshadow::Tensor<gpu, 4, float> &w)
+{
+    const int B = x.shape_[0]; // Bench Size
+    const int M = y.shape_[1]; // Number of Output Feature Maps
+    const int C = x.shape_[1]; // Number of Input Feature Maps
+    const int H = x.shape_[2]; // Input Height(Rows)
+    const int W = x.shape_[3]; // Input Width(Columns)
+    const int K = w.shape_[3]; // Filter Size
+
+    const int H_out = H-K+1;
+    const int W_out = W-K+1;
+
+    float * x_unroll_device;
+
+    cudaMemcpyToSymbol(mask, w.dptr_ ,sizeof(float)*(M*C*K*K));
+
+    int size_of_unrolled_x = H_out*W_out*C*K*K*B;
+    cudaMalloc ((void **) &x_unroll_device, size_of_unrolled_x * sizeof(float));
+
+    int grid_num = H_out*W_out*C;
+    int grid_dim_x = ((grid_num-1)/BLOCK_SIZE) +1;
+    dim3 gridDim(grid_dim_x, B,1);
+    dim3 blockDim(BLOCK_SIZE,1,1);
+    forward_kernel<<<gridDim, blockDim>>>(y.dptr_,x.dptr_, x_unroll_device,M,B,C,H,W,K);
+    MSHADOW_CUDA_CALL(cudaDeviceSynchronize());
+    /*
+    gridDim = dim3((H_out*W_out-1)/1024+1, B,1);
+    blockDim = dim3(1024, 1, 1);
+    matrixMultiply<<<gridDim, blockDim>>>(y.dptr_, x_unroll_device,B,M,C,H,W,K);
+    MSHADOW_CUDA_CALL(cudaDeviceSynchronize());
+    */
+}
+
+/* 
+    This tells mxnet how to do an op when it's not a float.
+    This is not used in the ECE408 project
+*/
+template <typename gpu, typename DType>
+void forward(mshadow::Tensor<gpu, 4, DType> &y, const mshadow::Tensor<gpu, 4, DType> &x, const mshadow::Tensor<gpu, 4, DType> &w)
+{
+    CHECK_EQ(0,1) << "Remove this line and replace it with your implementation.";
+}
+}
+}
+
+#endif

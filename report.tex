@@ -1,0 +1,193 @@
+
+\documentclass[12pt,titlepage]{article}
+
+\textwidth 6.5 true in
+\textheight 9.0 true in
+\hoffset -.5 true in
+\voffset -1.0 true in
+
+\setlength{\topmargin}{0in}
+\title{ECE 408 - Applied Parallel Programming Project}
+\date{\today}
+\author{
+	Hwanseo Choi (hwanseo2), \\
+	Simeng Liu (simengl2),\\
+	Chandan Vempati (vempati2).
+}
+
+\begin{document}
+\maketitle
+
+\section*{Milestone 1}
+
+\subsection*{Question 1}
+\textbf{Team Members}: \\
+	Hwanseo Choi (hwanseo2),\\
+	Simeng Liu (simengl2),\\
+	Chandan Vempati(vempati2).\\
+
+
+\subsection*{Question 2}
+The list of kernels and some their corresponding parameters which were measured is shown in Table 1.
+\begin{table}[h!]
+	\centering
+	\begin{tabular}{||c | c | c | c||}
+		\hline
+		Name                                                                                                      & Time(\%) & Time          & Calls \\ [0.5ex]
+		\hline\hline
+		void fermiPlusCgemmLDS128  \textunderscore  batched                                                       & 34.09    & 118.48 ms     & 9     \\
+		void cudnn::detail::implicit   \textunderscore   convolve  \textunderscore  sgemm                         & 27.02    & 93.917 ms     & 1     \\
+		void fft2d  \textunderscore  c2r  \textunderscore  32x32                                                  & 12.62    & 43.847 ms     & 9     \\
+		sgemm  \textunderscore  sm35  \textunderscore  ldg  \textunderscore  tn  \textunderscore  128x8x256x16x32 & 8.20     & 28.512 ms     & 1     \\
+		CUDA  \textunderscore  memcpy  \textunderscore  HtoD                                                      & 6.46     & 22.445 ms     & 14    \\
+		void cudnn::detail::activation  \textunderscore  fw  \textunderscore  4d  \textunderscore  kernel         & 4.07     & 14.158 ms     & 2     \\
+		void cudnn::detail::pooling  \textunderscore  fw  \textunderscore  4d  \textunderscore  kernel            & 3.82     & 13.292 ms     & 1     \\
+		void fft2d  \textunderscore  r2c  \textunderscore  32x32                                                  & 1.72     & 5.9651 ms     & 9     \\
+		sgemm  \textunderscore  sm35  \textunderscore  ldg \textunderscore tn  \textunderscore  64x16x128x8x32    & 1.17     & 4.0583 ms     & 1     \\
+		void mshadow::cuda::MapPlanLargeKernel                                                                    & 0.37     & 1.2844 ms     & 1     \\
+		void mshadow::cuda::SoftmaxKernel                                                                         & 0.32     & 1.1046 ms     & 1     \\
+		void mshadow::cuda::MapPlanKernel                                                                         & 0.05     & 177.02 $\mu$s & 13    \\
+		void mshadow::cuda::MapPlanKernel                                                                         & 0.04     & 146.34 $\mu$s & 2     \\
+		sgemm  \textunderscore  sm35  \textunderscore  ldg  \textunderscore  tn  \textunderscore  32x16x64x8x16   & 0.04     & 130.11 $\mu$s & 1     \\
+		void mshadow::cuda::MapPlanKernel                                                                         & 0.01     & 22.399 $\mu$s & 1     \\
+		void fft2d  \textunderscore  r2c  \textunderscore  32x32                                                  & 0.01     & 20.671 $\mu$s & 1     \\
+		CUDA  \textunderscore  memcpy  \textunderscore  DtoH                                                      & 0.00     & 9.9200 $\mu$s & 1     \\[1ex]
+		\hline
+		\hline
+	\end{tabular}
+	\caption{CUDA kernel calls and their corresponding parameters}
+\end{table}
+
+
+\pagebreak
+\subsection*{Question 3}
+
+The list of APIs and some their corresponding parameters which were measured are shown in Table 2.
+
+\begin{table}[h!]
+	\centering
+	\begin{tabular}{||c | c | c | c||}
+		\hline
+		Name                             & Time(\%) & Time          & Calls \\ [0.5ex]
+		\hline\hline
+		cudaStreamCreateWithFlags        & 43.55    & 1.92546 s     & 18    \\
+		cudaFree                         & 27.11    & 1.19848 s     & 10    \\
+		cudaMemGetInfo                   & 20.70    & 915.17 ms     & 27    \\
+		cudaStreamSynchronize            & 7.31     & 323.39 ms     & 29    \\
+		cudaMemcpy2DAsync                & 1.01     & 44.605 ms     & 9     \\
+		cudaMalloc                       & 0.16     & 7.2049 ms     & 45    \\
+		cudaStreamCreate                 & 0.03     & 1.5196 ms     & 4     \\
+		cuDeviceTotalMem                 & 0.03     & 1.3522 ms     & 4     \\
+		cuDeviceGetAttribute             & 0.03     & 1.1863 ms     & 352   \\
+		cudaEventCreateWithFlags         & 0.02     & 1.0891 ms     & 114   \\
+		cudaLaunch                       & 0.02     & 728.51 $\mu$s & 53    \\
+		cudaMemcpy                       & 0.01     & 405.96 $\mu$s & 6     \\
+		cudaSetupArgument                & 0.01     & 352.84 $\mu$s & 619   \\
+		cudaDeviceGetAttribute           & 0.00     & 135.99 $\mu$s & 116   \\
+		cuDeviceGetName                  & 0.00     & 102.82 $\mu$s & 4     \\
+		cudaSetDevice                    & 0.00     & 82.812 $\mu$s & 35    \\
+		cudaStreamWaitEvent              & 0.00     & 55.338 $\mu$s & 27    \\
+		cudaStreamCreateWithPriority     & 0.00     & 50.246 $\mu$s & 2     \\
+		cudaConfigureCall                & 0.00     & 48.487 $\mu$s & 53    \\
+		cudaGetDevice                    & 0.00     & 26.507 $\mu$s & 10    \\
+		cudaEventRecord                  & 0.00     & 21.586 $\mu$s & 12    \\
+		cudaGetLastError                 & 0.00     & 20.909 $\mu$s & 34    \\
+		cudaBindTexture                  & 0.00     & 15.628 $\mu$s & 1     \\
+		cudaPeekAtLastError              & 0.00     & 12.229 $\mu$s & 18    \\
+		cuDeviceGetCount                 & 0.00     & 6.8830 $\mu$s & 6     \\
+		cudaEventCreate                  & 0.00     & 5.9220 $\mu$s & 1     \\
+		cudaStreamGetPriority            & 0.00     & 5.8400 $\mu$s & 1     \\
+		cuDeviceGet                      & 0.00     & 5.0390 $\mu$s & 6     \\
+		cudaDeviceGetStreamPriorityRange & 0.00     & 4.9430 $\mu$s & 2     \\
+		cuInit                           & 0.00     & 3.8850 $\mu$s & 3     \\
+		cuDriverGetVersion               & 0.00     & 2.6300 $\mu$s & 3     \\
+		cudaEventDestroy                 & 0.00     & 2.4120 $\mu$s & 1     \\
+		cudaGetDeviceCount               & 0.00     & 2.1210 $\mu$s & 1     \\
+		cudaUnbindTexture                & 0.00     & 1.8500 $\mu$s & 1     \\[1ex]
+		\hline
+	\end{tabular}
+	\caption{CUDA APIs calls and their corresponding parameters}
+\end{table}
+
+
+\subsection*{Question 4}
+\textbf{Application Program Interfaces} or \textbf{APIs} is a set of subroutine definitions that is provided by NVIDIA as part of the CUDA tool and is in-charge of connecting host and device for various purposes. For example, copy memory from host to device or the other direction.\\
+\textbf{Kernels} are the custom code that is defined by the user and are executed $N$ times in parallel by $N$ different CUDA threads, as opposed to only once like regular C functions.
+
+
+\subsection*{Question 5}
+\textbf{Output of rai running MXNET on the CPU is as follows:}\\
+\noindent\fbox{\parbox{\textwidth}{\texttt{
+	Loading fashion-mnist data...\\
+	done\\
+	Loading model...\\
+	done\\
+	New Inference\\
+	EvalMetric: {'accuracy': 0.8444}
+}}}
+
+
+\subsection*{Question 6}
+The program run time on the CPU is \textbf{12.74 s}.
+
+
+\subsection*{Question 7}
+\textbf{Output of rai running MXNET on the GPU is as follows:}\\
+\noindent\fbox{\parbox{\textwidth}{\texttt{
+	Running /usr/bin/time python m1.2.py\\
+	Loading fashion-mnist data...\\
+	done\\
+	Loading model...\\
+	src/operator/././ cudnn \textunderscore algoreg-inl.h:112: Running performance tests to find the best convolution algorithm, this can take a while...(setting env variable MXNET\textunderscore CUDNN \textunderscore AUTOTUNE \textunderscore DEFAULT to 0 to disable)\\
+	done\\
+	New Inference\\
+	EvalMetric: {'accuracy': 0.8444}
+}}}
+
+
+\subsection*{Question 8}
+The program run time on the GPU is \textbf{2.13 s}.
+
+\pagebreak
+\section*{Milestone 2}
+
+\subsection*{Question 1}
+
+The list of total execution time for all parameters is shown in Table 3.
+
+\begin{table}[h!]
+	\centering
+	\begin{tabular}{||c | c ||}
+		\hline
+		Number of Images & Time (s)                                      \\ [0.5ex]
+		\hline\hline
+		10000 (default)  & 30.58 user 1.55 system 0:30.03 elapsed        \\
+		1000             & 1.06 user 0.61 system 0:01.02 elapsed         \\
+		100              & 0.70 user 0.48 system 0:00.72 elapsed         \\
+		\hline\hline
+	\end{tabular}
+	\caption{Total execution times and their corresponding parameters}
+\end{table}
+
+
+\subsection*{Question 2}
+
+The list of op time for all parameters is shown in Table 4.
+
+\begin{table}[h!]
+	\centering
+	\begin{tabular}{||c | c | c ||}
+		\hline
+		Number of Images & Op Time 1 (s) & Op Time 2 (s) \\ [0.5ex]
+		\hline\hline
+		10000 (default)  & 6.61          & 19.48         \\
+		1000             & 0.07          &  0.20         \\
+		100              & 0.01          &  0.02         \\
+		\hline\hline
+	\end{tabular}
+	\caption{Total execution times and their corresponding parameters}
+\end{table}
+
+The Op Time scales linearly with the number of images.
+
+\end{document}
